@@ -1,0 +1,18 @@
+# Datasets (synthetic or real) — regenerate/download locally, don't commit.
+# Anchored to the project root so it doesn't match the src/knee_mri/data package.
+/data/
+*.npy
+
+# Training outputs
+/runs/
+*.pt
+*.ckpt
+
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+*.egg-info/
+.venv/
+venv/
