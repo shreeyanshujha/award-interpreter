@@ -1,0 +1,30 @@
+# Default configuration for knee-MRI training.
+# Every field maps to a attribute on knee_mri.config.Config and can be
+# overridden from the command line (see scripts/train.py --help).
+
+# --- data ---
+data_root: data/synthetic      # root containing train/ valid/ and label csvs
+planes: [axial, coronal, sagittal]
+tasks: [abnormal, acl, meniscus]
+image_size: 224                # slices are resized/cropped to this square
+max_slices: 0                  # 0 = use all slices; >0 caps slices per volume
+
+# --- model ---
+backbone: resnet18             # one of: resnet18, alexnet
+pretrained: false              # ImageNet weights (needs network on first run)
+pool: max                      # slice aggregation: max or avg
+dropout: 0.5
+
+# --- optimization ---
+epochs: 5
+lr: 0.00001
+weight_decay: 0.01
+optimizer: adam                # adam or sgd
+grad_clip: 0.0                 # 0 disables clipping
+
+# --- runtime ---
+device: auto                   # auto | cpu | cuda
+seed: 42
+num_workers: 0                 # batch size is fixed at 1 (variable slice counts)
+out_dir: runs                  # checkpoints + logs land in out_dir/<run name>
+log_every: 10                  # log training loss every N exams

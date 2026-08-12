@@ -1,0 +1,43 @@
+# Configuration targeting the RSNA Knee Abnormality Detection task:
+# 12 binary findings per study, macro ROC-AUC, weakly-supervised training
+# (small gold set + report-derived soft labels).
+
+# --- data ---
+data_root: data/rsna
+dataset_format: rsna
+planes: [axial, coronal, sagittal]
+tasks: [acl, mcl, medial_meniscus, lateral_meniscus,
+        medial_oa, lateral_oa, pf_oa, effusion,
+        synovitis, bakers_cyst, contusion, fracture]
+image_size: 224
+max_slices: 0
+
+# 2.5D input: bounded compute per exam (the competition scores efficiency and
+# caps offline inference at 9 hours).
+input_mode: triplets
+positions_per_plane: 6
+slice_gap: 2
+
+# Weak-supervision confidence weights (gold studies count ~8x a report study).
+gold_weight: 8.0
+report_weight: 1.0
+
+# --- model ---
+backbone: resnet18
+pretrained: false
+pool: max
+dropout: 0.5
+
+# --- optimization ---
+epochs: 5
+lr: 0.00003
+weight_decay: 0.01
+optimizer: adam
+grad_clip: 1.0
+
+# --- runtime ---
+device: auto
+seed: 42
+num_workers: 0
+out_dir: runs
+log_every: 10
