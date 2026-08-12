@@ -55,6 +55,51 @@ def volume_to_tensor(
     return vol
 
 
+def volume_to_triplets(
+    volume: np.ndarray,
+    image_size: int = 224,
+    positions: int = 6,
+    gap: int = 2,
+    train: bool = False,
+    rng: np.random.Generator | None = None,
+) -> torch.Tensor:
+    """2.5D encoding: sample ``positions`` centres, stack [c-gap, c, c+gap] as RGB.
+
+    Returns ``(positions, 3, image_size, image_size)``. Compared with feeding
+    every slice, this bounds compute per exam (critical for the RSNA offline
+    9-hour inference budget) while giving the 2D backbone local through-plane
+    context in its channels. Centres are evenly spaced over the middle of the
+    stack; training jitters them by ±1 for augmentation.
+    """
+    if volume.ndim != 3:
+        raise ValueError(f"expected a 3D volume (S, H, W), got shape {volume.shape}")
+
+    vol = torch.as_tensor(np.ascontiguousarray(volume), dtype=torch.float32)
+    s = vol.shape[0]
+    vmax = float(vol.max())
+    if vmax > 0:
+        vol = vol / vmax
+
+    centres = np.linspace(0.15 * (s - 1), 0.85 * (s - 1), num=positions)
+    centres = np.round(centres).astype(int)
+    if train and rng is not None:
+        centres = centres + rng.integers(-1, 2, size=len(centres))
+    centres = np.clip(centres, 0, s - 1)
+
+    triplets = []
+    for c in centres:
+        idx = np.clip([c - gap, c, c + gap], 0, s - 1)
+        triplets.append(vol[idx])          # (3, H, W)
+    stack = torch.stack(triplets)          # (P, 3, H, W)
+
+    stack = F.interpolate(
+        stack, size=(image_size, image_size), mode="bilinear", align_corners=False
+    )
+    if train:
+        stack = _augment(stack, rng)
+    return (stack - _MEAN) / _STD
+
+
 def _select_slices(
     vol: torch.Tensor, k: int, train: bool, rng: np.random.Generator | None
 ) -> torch.Tensor:

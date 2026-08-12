@@ -9,8 +9,10 @@ from typing import Dict, List, Optional
 import torch
 from torch.utils.data import DataLoader
 
+import torch.nn.functional as F
+
 from ..config import Config
-from ..data import KneeMRIDataset
+from ..data import KneeMRIDataset, build_dataset
 from ..models import build_model
 from ..utils import get_logger, seed_everything
 from .evaluate import _to_device, evaluate
@@ -46,15 +48,12 @@ def train(cfg: Config, run_name: Optional[str] = None) -> Dict[str, object]:
     device = resolve_device(cfg.device)
     logger.info("device: %s", device)
 
-    train_ds = KneeMRIDataset(
-        cfg.data_root, "train", cfg.planes, cfg.tasks,
-        image_size=cfg.image_size, max_slices=cfg.max_slices, train=True, seed=cfg.seed,
-    )
-    valid_ds = KneeMRIDataset(
-        cfg.data_root, "valid", cfg.planes, cfg.tasks,
-        image_size=cfg.image_size, max_slices=cfg.max_slices, train=False, seed=cfg.seed,
-    )
+    train_ds = build_dataset(cfg, "train", train=True)
+    valid_ds = build_dataset(cfg, "valid", train=False)
     logger.info("train exams: %d | valid exams: %d", len(train_ds), len(valid_ds))
+    if hasattr(train_ds, "num_gold"):
+        logger.info("  gold-labeled: %d | report-labeled: %d",
+                    train_ds.num_gold, train_ds.num_report)
 
     # batch_size is fixed at 1: slice counts vary, so exams can't be stacked.
     train_loader = DataLoader(train_ds, batch_size=1, shuffle=True, num_workers=cfg.num_workers)
@@ -62,7 +61,13 @@ def train(cfg: Config, run_name: Optional[str] = None) -> Dict[str, object]:
 
     model = build_model(cfg, num_tasks=len(cfg.tasks)).to(device)
     optimizer = _build_optimizer(model, cfg)
-    criterion = torch.nn.BCEWithLogitsLoss(pos_weight=_pos_weight(train_ds, device))
+    if isinstance(train_ds, KneeMRIDataset):
+        # Hard 0/1 labels: class-imbalance-corrected BCE.
+        criterion = torch.nn.BCEWithLogitsLoss(pos_weight=_pos_weight(train_ds, device))
+    else:
+        # RSNA weak supervision: per-sample confidence weights carried by the
+        # dataset (gold >> report-derived >> unmentioned); plain BCE for val.
+        criterion = torch.nn.BCEWithLogitsLoss()
 
     out_dir = Path(cfg.out_dir) / (run_name or "latest")
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -81,7 +86,11 @@ def train(cfg: Config, run_name: Optional[str] = None) -> Dict[str, object]:
 
             optimizer.zero_grad()
             logits = model(planes)
-            loss = criterion(logits, labels)
+            if "weights" in batch:
+                weights = batch["weights"].squeeze(0).to(device)
+                loss = F.binary_cross_entropy_with_logits(logits, labels, weight=weights)
+            else:
+                loss = criterion(logits, labels)
             loss.backward()
             if cfg.grad_clip > 0:
                 torch.nn.utils.clip_grad_norm_(model.parameters(), cfg.grad_clip)

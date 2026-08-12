@@ -15,6 +15,8 @@ def main() -> None:
     ap.add_argument("--run-name", default="latest", help="subdir under out_dir for this run")
     # Overrides (None => fall back to the config / defaults).
     ap.add_argument("--data-root")
+    ap.add_argument("--dataset-format", choices=["mrnet", "rsna"], dest="dataset_format")
+    ap.add_argument("--input-mode", choices=["triplets", "slices"], dest="input_mode")
     ap.add_argument("--backbone", choices=["resnet18", "alexnet"])
     ap.add_argument("--pool", choices=["max", "avg"])
     ap.add_argument("--epochs", type=int)

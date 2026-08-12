@@ -9,7 +9,7 @@ import torch
 from torch.utils.data import DataLoader
 
 from knee_mri.config import Config
-from knee_mri.data import KneeMRIDataset
+from knee_mri.data import build_dataset
 from knee_mri.engine import evaluate, resolve_device
 from knee_mri.engine.metrics import format_metrics
 from knee_mri.models import build_model
@@ -38,10 +38,7 @@ def main() -> None:
         raise SystemExit("checkpoint has no embedded config; pass --config explicitly")
 
     device = resolve_device(cfg.device)
-    ds = KneeMRIDataset(
-        cfg.data_root, args.split, cfg.planes, cfg.tasks,
-        image_size=cfg.image_size, max_slices=cfg.max_slices, train=False,
-    )
+    ds = build_dataset(cfg, args.split, train=False)
     loader = DataLoader(ds, batch_size=1, shuffle=False)
 
     model = build_model(cfg, num_tasks=len(cfg.tasks)).to(device)

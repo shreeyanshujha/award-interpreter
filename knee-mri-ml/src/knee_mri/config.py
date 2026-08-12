@@ -18,10 +18,18 @@ import yaml
 class Config:
     # data
     data_root: str = "data/synthetic"
+    dataset_format: str = "mrnet"  # mrnet (3-task, per-plane .npy) or rsna (12-task, weak labels)
     planes: List[str] = field(default_factory=lambda: ["axial", "coronal", "sagittal"])
     tasks: List[str] = field(default_factory=lambda: ["abnormal", "acl", "meniscus"])
     image_size: int = 224
     max_slices: int = 0
+
+    # rsna-specific: 2.5D input construction + weak-supervision weighting
+    input_mode: str = "triplets"   # triplets (2.5D, bounded compute) or slices (all slices)
+    positions_per_plane: int = 6   # triplet centres sampled per plane
+    slice_gap: int = 2             # channel offset within a triplet [c-gap, c, c+gap]
+    gold_weight: float = 8.0       # loss weight for gold-labeled studies
+    report_weight: float = 1.0     # loss weight for report-derived labels
 
     # model
     backbone: str = "resnet18"
@@ -44,6 +52,10 @@ class Config:
     log_every: int = 10
 
     def __post_init__(self) -> None:
+        if self.dataset_format not in {"mrnet", "rsna"}:
+            raise ValueError(f"dataset_format must be 'mrnet' or 'rsna', got {self.dataset_format!r}")
+        if self.input_mode not in {"triplets", "slices"}:
+            raise ValueError(f"input_mode must be 'triplets' or 'slices', got {self.input_mode!r}")
         if self.pool not in {"max", "avg"}:
             raise ValueError(f"pool must be 'max' or 'avg', got {self.pool!r}")
         if self.backbone not in {"resnet18", "alexnet"}:
